@@ -1,6 +1,8 @@
 # 🚗 Car Sales Data Pipeline (Azure Fabric)
 
 A fully managed end-to-end **Fabric data pipeline** built using **Microsoft Fabric data factory**, **Azure SQL**, **Azure Databricks**, and **Azure Delta Lake** architecture to model a star-schema-based data warehouse with **slowly changing dimensions**.
+
+
 <img width="838" alt="image002" src="https://github.com/user-attachments/assets/139007d0-6d18-4f4b-9d38-8214a8e975d4" />
 
 
