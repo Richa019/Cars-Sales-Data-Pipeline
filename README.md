@@ -2,6 +2,8 @@
 
 A fully managed end-to-end **Fabric data pipeline** built using **Microsoft Fabric data factory**, **Azure SQL**, **Azure Databricks**, and **Azure Delta Lake** architecture to model a star-schema-based data warehouse with **slowly changing dimensions**.
 
+
+
 ---
 
 ## 🏗️ Project Overview
