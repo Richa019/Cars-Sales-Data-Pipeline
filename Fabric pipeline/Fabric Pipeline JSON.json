@@ -1,0 +1,370 @@
+{
+    "name": "incremental cars data",
+    "objectId": "4dabf45e-1cff-4d31-b1c2-77b84ea8ca4c",
+    "properties": {
+        "activities": [
+            {
+                "name": "Bronze",
+                "description": "Copy incremental data from SQL database to the Bronze layer",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "last load",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "current load",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": {
+                            "value": "SELECT * FROM source_cars_data WHERE Date_ID >'@{activity('last load').output.value[0].last_load}' AND Date_Id <= '@{activity('current load').output.value[0].max_date}'",
+                            "type": "Expression"
+                        },
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None",
+                        "datasetSettings": {
+                            "annotations": [],
+                            "type": "AzureSqlTable",
+                            "schema": [],
+                            "typeProperties": {
+                                "database": "sameer1106"
+                            },
+                            "externalReferences": {
+                                "connection": "c6025ed7-280f-4a8a-b46e-a947781463a4"
+                            }
+                        }
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings",
+                            "enableVertiParquet": true
+                        },
+                        "datasetSettings": {
+                            "annotations": [],
+                            "type": "Parquet",
+                            "typeProperties": {
+                                "location": {
+                                    "type": "AzureBlobFSLocation",
+                                    "folderPath": "Bronze",
+                                    "fileSystem": "dataengineer"
+                                },
+                                "compressionCodec": "snappy"
+                            },
+                            "schema": [],
+                            "externalReferences": {
+                                "connection": "e1594fc4-72ec-4997-a154-ae810d4c164d"
+                            }
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                }
+            },
+            {
+                "name": "last load",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "select * from water_table",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "firstRowOnly": false,
+                    "datasetSettings": {
+                        "annotations": [],
+                        "type": "AzureSqlTable",
+                        "schema": [],
+                        "typeProperties": {
+                            "schema": "dbo",
+                            "table": "water_table",
+                            "database": "sameer1106"
+                        },
+                        "externalReferences": {
+                            "connection": "c6025ed7-280f-4a8a-b46e-a947781463a4"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "current load",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderQuery": "select max(Date_ID) as max_date from source_cars_data",
+                        "queryTimeout": "02:00:00",
+                        "partitionOption": "None"
+                    },
+                    "firstRowOnly": false,
+                    "datasetSettings": {
+                        "annotations": [],
+                        "type": "AzureSqlTable",
+                        "schema": [],
+                        "typeProperties": {
+                            "schema": "dbo",
+                            "table": "source_cars_data",
+                            "database": "sameer1106"
+                        },
+                        "externalReferences": {
+                            "connection": "c6025ed7-280f-4a8a-b46e-a947781463a4"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Water mark update",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Bronze",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[UpdateWatermarkTable]",
+                    "database": "sameer1106",
+                    "storedProcedureParameters": {
+                        "lastload": {
+                            "value": {
+                                "value": "@activity('current load').output.value[0].max_date",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                },
+                "externalReferences": {
+                    "connection": "c6025ed7-280f-4a8a-b46e-a947781463a4"
+                }
+            },
+            {
+                "name": "Silver",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Water mark update",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Silver",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            },
+            {
+                "name": "Branch Dimension",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Silver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Gold_dim_branch",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            },
+            {
+                "name": "Date Dimension",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Silver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Gold_dim_date",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            },
+            {
+                "name": "Dealer Dimension",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Silver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Gold_dim_dealer",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            },
+            {
+                "name": "Model Dimension",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Silver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Gold_dim_model",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            },
+            {
+                "name": "Gold Fact Table",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Model Dimension",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "Dealer Dimension",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "Date Dimension",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    },
+                    {
+                        "activity": "Branch Dimension",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookPath": "/Carsproject/Gold_Fact",
+                    "existingClusterId": "0701-022935-pc286ukd"
+                },
+                "externalReferences": {
+                    "connection": "2eed3017-936b-4114-b93f-f090b7424fdf"
+                }
+            }
+        ],
+        "lastModifiedByObjectId": "45398d6a-c345-4f5c-9d8b-3914d5c240e3",
+        "lastPublishTime": "2025-07-01T01:40:17Z"
+    }
+}
